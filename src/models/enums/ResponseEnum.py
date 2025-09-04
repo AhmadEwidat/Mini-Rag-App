@@ -6,3 +6,5 @@ class ResponseSiginal(Enum):
     FILE_SIZE_EXCEEDED="File size exceeds the maximum limit."
     FILE_UPLOADED_SUCCESS="File uploaded successfully."
     FILE_UPLOADED_FAILED="File upload failed."
+    PROCESSING_FAILED="File processing failed."
+    PROCESSING_SUCCESS="File processed successfully."

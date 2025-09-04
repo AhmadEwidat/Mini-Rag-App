@@ -1,6 +1,13 @@
 fastapi==0.116.1
+starlette==0.47.3
 uvicorn==0.35.0
+
+pydantic==2.8.2
+pydantic-settings==2.3.0
+langchain==0.2.14
+langchain-community==0.2.12
+
+pymupdf==1.22.3
 python-multipart==0.0.20
 python-dotenv==1.0.0
-pydantic-settings==2.3.0
 aiofiles==24.1.0
