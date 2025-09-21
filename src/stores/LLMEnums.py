@@ -1,0 +1,26 @@
+from enum import Enum
+
+class LLMEnums(str, Enum):
+    OPENAI = "openai"
+    COHERE = "cohere"
+    ANTHROPIC = "anthropic"
+    AZURE_OPENAI = "azure_openai"
+    COHERE = "cohere"
+    AI21 = "ai21"
+    LLMOXY = "llmoxy"
+    CUSTOM = "custom"
+    LOCAL = "local"
+    HUGGINGFACE = "huggingface"
+    VERCEL_AI = "vercel_ai"
+    MISTRAL = "mistral"
+    STARCODER = "starcoder"
+    GOOGLE_PALM = "google_palm"
+    ALPHACODE = "alphacode"
+    LLAMA2 = "llama2"
+    CLAUDE = "claude"
+    GEMINI = "gemini"
+    OTHER = "other"
+class OpenAIEnums(Enum):
+    System ="system"
+    User="user"
+    ASSISTANT="assistant"
