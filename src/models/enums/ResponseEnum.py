@@ -8,3 +8,4 @@ class ResponseSiginal(Enum):
     FILE_UPLOADED_FAILED="File upload failed."
     PROCESSING_FAILED="File processing failed."
     PROCESSING_SUCCESS="File processed successfully."
+    NO_FILES_TO_PROCESS="No files available to process."
