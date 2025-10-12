@@ -21,6 +21,15 @@ class LLMEnums(str, Enum):
     GEMINI = "gemini"
     OTHER = "other"
 class OpenAIEnums(Enum):
-    System ="system"
-    User="user"
+    SYSTEM ="system"
+    USER="user"
     ASSISTANT="assistant"
+class CoHereEnums(Enum):
+    SYSTEM ="SYSTEM"
+    USER="USER"
+    ASSISTANT="CHATBOT"
+    DOCUMENT="search_document"
+    QUERY="search_query"
+class DocumentTypeEnums(Enum):
+    DOCUMENT="document"
+    QUERY="query"
