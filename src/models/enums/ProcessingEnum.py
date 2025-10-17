@@ -1,4 +1,6 @@
 from enum import Enum
+
 class ProcessingEnum(Enum):
-    TXT=".txt"
-    PDF=".pdf"
+
+    TXT = ".txt"
+    PDF = ".pdf"

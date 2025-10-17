@@ -1,4 +1,3 @@
-
 from ..LLMInterface import LLMInterface
 from ..LLMEnums import OpenAIEnums
 from openai import OpenAI
@@ -7,12 +6,14 @@ import logging
 class OpenAIProvider(LLMInterface):
 
     def __init__(self, api_key: str, api_url: str=None,
+                       api_timeout: int | float = 30,
                        default_input_max_characters: int=1000,
                        default_generation_max_output_tokens: int=1000,
                        default_generation_temperature: float=0.1):
         
         self.api_key = api_key
         self.api_url = api_url
+        self.api_timeout = api_timeout
 
         self.default_input_max_characters = default_input_max_characters
         self.default_generation_max_output_tokens = default_generation_max_output_tokens
@@ -25,9 +26,11 @@ class OpenAIProvider(LLMInterface):
 
         self.client = OpenAI(
             api_key = self.api_key,
-            api_url = self.api_url
+            base_url = self.api_url if self.api_url and len(self.api_url) else None,
+            timeout = self.api_timeout,
         )
 
+        self.enums = OpenAIEnums
         self.logger = logging.getLogger(__name__)
 
     def set_generation_model(self, model_id: str):
@@ -58,18 +61,22 @@ class OpenAIProvider(LLMInterface):
             self.construct_prompt(prompt=prompt, role=OpenAIEnums.USER.value)
         )
 
-        response = self.client.chat.completions.create(
-            model = self.generation_model_id,
-            messages = chat_history,
-            max_tokens = max_output_tokens,
-            temperature = temperature
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model = self.generation_model_id,
+                messages = chat_history,
+                max_tokens = max_output_tokens,
+                temperature = temperature
+            )
+        except Exception as exc:
+            self.logger.exception("OpenAI generate_text failed: %s", exc)
+            return None
 
         if not response or not response.choices or len(response.choices) == 0 or not response.choices[0].message:
             self.logger.error("Error while generating text with OpenAI")
             return None
 
-        return response.choices[0].message["content"]
+        return response.choices[0].message.content
 
 
     def embed_text(self, text: str, document_type: str = None):
@@ -82,10 +89,14 @@ class OpenAIProvider(LLMInterface):
             self.logger.error("Embedding model for OpenAI was not set")
             return None
         
-        response = self.client.embeddings.create(
-            model = self.embedding_model_id,
-            input = text,
-        )
+        try:
+            response = self.client.embeddings.create(
+                model = self.embedding_model_id,
+                input = text,
+            )
+        except Exception as exc:
+            self.logger.exception("OpenAI embed_text failed: %s", exc)
+            return None
 
         if not response or not response.data or len(response.data) == 0 or not response.data[0].embedding:
             self.logger.error("Error while embedding text with OpenAI")

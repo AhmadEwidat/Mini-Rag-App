@@ -2,6 +2,8 @@ from ..LLMInterface import LLMInterface
 from ..LLMEnums import CoHereEnums, DocumentTypeEnum
 import cohere
 import logging
+import time
+from cohere.errors import TooManyRequestsError
 
 class CoHereProvider(LLMInterface):
 
@@ -23,6 +25,7 @@ class CoHereProvider(LLMInterface):
 
         self.client = cohere.Client(api_key=self.api_key)
 
+        self.enums = CoHereEnums
         self.logger = logging.getLogger(__name__)
 
     def set_generation_model(self, model_id: str):
@@ -76,18 +79,36 @@ class CoHereProvider(LLMInterface):
         if document_type == DocumentTypeEnum.QUERY:
             input_type = CoHereEnums.QUERY
 
-        response = self.client.embed(
-            model = self.embedding_model_id,
-            texts = [self.process_text(text)],
-            input_type = input_type,
-            embedding_types=['float'],
-        )
+        # Retry with exponential backoff on rate limiting
+        max_retries = 5
+        backoff_seconds = 1.0
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                response = self.client.embed(
+                    model = self.embedding_model_id,
+                    texts = [self.process_text(text)],
+                    input_type = input_type,
+                    embedding_types=['float'],
+                )
 
-        if not response or not response.embeddings or not response.embeddings.float:
-            self.logger.error("Error while embedding text with CoHere")
-            return None
-        
-        return response.embeddings.float[0]
+                if not response or not response.embeddings or not response.embeddings.float:
+                    self.logger.error("Error while embedding text with CoHere")
+                    return None
+                
+                return response.embeddings.float[0]
+            except TooManyRequestsError as e:
+                last_exception = e
+                self.logger.warning(f"Cohere rate limit hit, retrying in {backoff_seconds:.1f}s (attempt {attempt+1}/{max_retries})")
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
+            except Exception as e:
+                last_exception = e
+                self.logger.error(f"Unexpected error while embedding with CoHere: {e}")
+                break
+
+        self.logger.error(f"Failed to embed after {max_retries} attempts: {last_exception}")
+        return None
     
     def construct_prompt(self, prompt: str, role: str):
         return {
