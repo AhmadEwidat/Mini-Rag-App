@@ -150,6 +150,34 @@ async def search_index(request: Request, project_id: str, search_request: Search
         }
     )
 
+@nlp_router.get("/debug/config")
+async def debug_config(request: Request):
+    """Debug endpoint to check configuration status"""
+    
+    config_status = {
+        "generation_client": {
+            "available": request.app.generation_client is not None,
+            "model_id": getattr(request.app.generation_client, 'generation_model_id', None) if request.app.generation_client else None,
+            "client_type": type(request.app.generation_client).__name__ if request.app.generation_client else None
+        },
+        "embedding_client": {
+            "available": request.app.embedding_client is not None,
+            "model_id": getattr(request.app.embedding_client, 'embedding_model_id', None) if request.app.embedding_client else None,
+            "embedding_size": getattr(request.app.embedding_client, 'embedding_size', None) if request.app.embedding_client else None,
+            "client_type": type(request.app.embedding_client).__name__ if request.app.embedding_client else None
+        },
+        "vectordb_client": {
+            "available": request.app.vectordb_client is not None,
+            "client_type": type(request.app.vectordb_client).__name__ if request.app.vectordb_client else None
+        },
+        "template_parser": {
+            "available": request.app.template_parser is not None,
+            "language": getattr(request.app.template_parser, 'language', None) if request.app.template_parser else None
+        }
+    }
+    
+    return JSONResponse(content=config_status)
+
 @nlp_router.post("/index/answer/{project_id}")
 async def answer_rag(request: Request, project_id: str, search_request: SearchRequest):
     
@@ -178,7 +206,14 @@ async def answer_rag(request: Request, project_id: str, search_request: SearchRe
         return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
-                    "signal": ResponseSignal.RAG_ANSWER_ERROR.value
+                    "signal": ResponseSignal.RAG_ANSWER_ERROR.value,
+                    "debug_info": {
+                        "project_id": project_id,
+                        "query": search_request.text,
+                        "limit": search_request.limit,
+                        "full_prompt": full_prompt,
+                        "chat_history": chat_history
+                    }
                 }
         )
     

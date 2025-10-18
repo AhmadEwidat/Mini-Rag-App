@@ -1,0 +1,30 @@
+Product Table Documentation
+
+This document contains information about our product table structure.
+
+## Product Table Schema
+
+The product table is designed to store information about various products in our inventory system.
+
+### Fields:
+- product_id: Unique identifier for each product
+- product_name: The name of the product
+- product_description: Detailed description of the product
+- product_price: The selling price of the product
+- product_category: The category this product belongs to
+- product_stock: Current stock quantity available
+- created_at: Timestamp when the product was added
+- updated_at: Timestamp when the product was last modified
+
+### Relationships:
+The product table has relationships with:
+- Order items table (one-to-many)
+- Category table (many-to-one)
+- Supplier table (many-to-one)
+
+### Indexes:
+- Primary key on product_id
+- Index on product_category for faster category-based queries
+- Index on product_name for search functionality
+
+This table is essential for our e-commerce platform and inventory management system.
