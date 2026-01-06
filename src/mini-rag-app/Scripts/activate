@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\Ahmad\Mini-Rag-App\src\mini-rag-app"
+VIRTUAL_ENV="C:\Users\Ahmad\Desktop\mini-rag-app\Mini-Rag-App\src\mini-rag-app"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

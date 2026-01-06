@@ -6,12 +6,13 @@ from controllers import DataController, ProjectController, ProcessController
 import aiofiles
 from models import ResponseSignal
 import logging
-from .schemes.data import ProcessRequest
+from .schemes.data import ProcessRequest, DBConnectRequest, DBProcessRequest
 from models.ProjectModel import ProjectModel
 from models.ChunkModel import ChunkModel
 from models.AssetModel import AssetModel
 from models.db_schemes import DataChunk, Asset
 from models.enums.AssetTypeEnum import AssetTypeEnum
+from controllers.DatabaseController import DatabaseController
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -205,3 +206,157 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
             "processed_files": no_files
         }
     )
+
+
+@data_router.post("/connect-db/{project_id}")
+async def connect_database(request: Request, project_id: str, payload: DBConnectRequest):
+
+    project_model = await ProjectModel.create_instance(
+        db_client=request.app.db_client
+    )
+    project = await project_model.get_project_or_create_one(
+        project_id=project_id
+    )
+
+    asset_model = await AssetModel.create_instance(
+        db_client=request.app.db_client
+    )
+
+    # store DB connection as an asset of type DATABASE
+    connection_string = payload.to_connection_string()
+
+    db_asset = Asset(
+        asset_project_id=project.id,
+        asset_type=AssetTypeEnum.DATABASE.value,
+        asset_name=f"db:{payload.database}",
+        asset_size=0,
+        asset_config={
+            "db_type": payload.db_type,
+            "host": payload.host,
+            "port": payload.port,
+            "username": payload.username,
+            "password": payload.password,
+            "database": payload.database,
+            "connection_string": connection_string,
+        }
+    )
+
+    record = await asset_model.create_asset(asset=db_asset)
+
+    # quick connect test
+    db_controller = DatabaseController(connection_string=connection_string)
+    ok = db_controller.connect()
+
+    if not ok:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal": ResponseSignal.PROCESSING_FAILED.value}
+        )
+
+    return JSONResponse(content={
+        "signal": ResponseSignal.FILE_UPLOAD_SUCCESS.value,
+        "asset_id": str(record.id)
+    })
+
+
+@data_router.post("/process-db/{project_id}")
+async def process_database(request: Request, project_id: str, payload: DBProcessRequest):
+
+    project_model = await ProjectModel.create_instance(
+        db_client=request.app.db_client
+    )
+    project = await project_model.get_project_or_create_one(
+        project_id=project_id
+    )
+
+    asset_model = await AssetModel.create_instance(
+        db_client=request.app.db_client
+    )
+
+    # load DB asset
+    if not payload.asset_id:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal": ResponseSignal.FILE_ID_ERROR.value}
+        )
+
+    # fetch asset record
+    # We don't have a direct get_by_id; reuse get_all and filter in memory
+    all_db_assets = await asset_model.get_all_project_assets(
+        asset_project_id=project.id,
+        asset_type=AssetTypeEnum.DATABASE.value,
+    )
+    target = None
+    for a in all_db_assets:
+        if str(a.id) == payload.asset_id:
+            target = a
+            break
+
+    if not target or not target.asset_config or "connection_string" not in target.asset_config:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal": ResponseSignal.PROCESSING_FAILED.value}
+        )
+
+    db_controller = DatabaseController(connection_string=target.asset_config["connection_string"]) 
+    if not db_controller.connect():
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal": ResponseSignal.PROCESSING_FAILED.value}
+        )
+
+    rows = []
+    if payload.custom_query:
+        rows = db_controller.extract_by_query(payload.custom_query)
+    elif payload.tables:
+        rows = db_controller.extract_by_tables(
+            tables=payload.tables, 
+            limit_per_table=payload.limit_per_table or 1000
+        )
+
+    if not rows:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal": ResponseSignal.NO_FILES_ERROR.value}
+        )
+
+    # convert rows to text documents
+    # naive table name detection from query not implemented here; documents are plain
+    documents = db_controller.rows_to_documents(rows)
+
+    # split into chunks
+    process_controller = ProcessController(project_id=project_id)
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=payload.chunk_size or 100,
+        chunk_overlap=payload.overlap_size or 20,
+        length_function=len,
+    )
+    split_docs = splitter.create_documents(documents)
+
+    chunk_model = await ChunkModel.create_instance(
+        db_client=request.app.db_client
+    )
+
+    if payload.do_reset == 1:
+        _ = await chunk_model.delete_chunks_by_project_id(project_id=project.id)
+
+    # create and insert chunks
+    file_chunks_records = [
+        DataChunk(
+            chunk_text=doc.page_content,
+            chunk_metadata=doc.metadata,
+            chunk_order=i+1,
+            chunk_project_id=project.id,
+            chunk_asset_id=target.id  # Use database asset ID
+        )
+        for i, doc in enumerate(split_docs)
+    ]
+
+    inserted = await chunk_model.insert_many_chunks(chunks=file_chunks_records)
+
+    return JSONResponse(content={
+        "signal": ResponseSignal.PROCESSING_SUCCESS.value,
+        "inserted_chunks": inserted,
+        "processed_files": 1
+    })

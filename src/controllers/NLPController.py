@@ -116,9 +116,9 @@ class NLPController(BaseController):
                 limit=limit,
             )
 
-            if not retrieved_documents or len(retrieved_documents) == 0:
-                self.logger.warning(f"No documents retrieved for query: {query}")
-                return answer, full_prompt, chat_history
+            no_docs = (not retrieved_documents or len(retrieved_documents) == 0)
+            if no_docs:
+                self.logger.warning(f"No documents retrieved for query: {query}. Falling back to general knowledge answer.")
             
             self.logger.info(f"Retrieved {len(retrieved_documents)} documents for query")
             
@@ -133,7 +133,7 @@ class NLPController(BaseController):
                         "doc_num": idx + 1,
                         "chunk_text": doc.text,
                 })
-                for idx, doc in enumerate(retrieved_documents)
+                for idx, doc in enumerate(retrieved_documents or [])
             ])
 
             footer_prompt = self.template_parser.get("rag", "footer_prompt")
@@ -149,7 +149,13 @@ class NLPController(BaseController):
                 )
             ]
 
-            full_prompt = "\n\n".join([ documents_prompts,  footer_prompt])
+            # Include the user's query explicitly to avoid the model thinking it's missing
+            user_query_prompt = f"## User Question: {query}"
+            if no_docs:
+                # No documents: rely on model's general knowledge
+                full_prompt = "\n\n".join([ user_query_prompt, footer_prompt ])
+            else:
+                full_prompt = "\n\n".join([ documents_prompts, user_query_prompt, footer_prompt])
             self.logger.info(f"Constructed full prompt with {len(full_prompt)} characters")
 
             # step4: Retrieve the Answer
@@ -161,6 +167,30 @@ class NLPController(BaseController):
 
             if not answer:
                 self.logger.error("Generation client returned None answer")
+                # Retry with minimal prompt leveraging general knowledge
+                try:
+                    minimal_history = [
+                        self.generation_client.construct_prompt(
+                            prompt=system_prompt,
+                            role=self.generation_client.enums.SYSTEM.value,
+                        )
+                    ] if system_prompt else []
+                    minimal_prompt = f"## User Question: {query}\n## Answer:"
+                    self.logger.info("Retrying generation with minimal prompt (general knowledge)")
+                    answer = self.generation_client.generate_text(
+                        prompt=minimal_prompt,
+                        chat_history=minimal_history
+                    )
+                except Exception:
+                    pass
+
+                # Fallback: try simple numeric aggregation if the user asked for averages over products
+                try:
+                    fallback = self._fallback_numeric_answer(query=query, retrieved_documents=retrieved_documents)
+                    if fallback:
+                        answer = fallback
+                except Exception:
+                    pass
             else:
                 self.logger.info(f"Successfully generated answer with {len(answer)} characters")
 
@@ -168,3 +198,29 @@ class NLPController(BaseController):
             self.logger.exception(f"Error in answer_rag_question: {exc}")
 
         return answer, full_prompt, chat_history
+
+    def _fallback_numeric_answer(self, query: str, retrieved_documents: list):
+        """Try to compute a numeric answer (e.g., average default_price) from retrieved docs.
+        This runs only when LLM generation fails.
+        """
+        import re
+        q = (query or "").lower()
+        wants_avg = any(k in q for k in ["average", "avg", "mean"]) or ("متوسط" in q)
+        if not wants_avg:
+            return None
+
+        prices = []
+        pattern = re.compile(r"default_price\s*:\s*([-+]?[0-9]*\.?[0-9]+)")
+        for doc in retrieved_documents:
+            text = getattr(doc, "text", "") or ""
+            for m in pattern.finditer(text):
+                try:
+                    prices.append(float(m.group(1)))
+                except Exception:
+                    continue
+
+        if not prices:
+            return None
+
+        avg_price = sum(prices) / len(prices)
+        return f"Estimated average of products price based on retrieved data: {avg_price:.2f} (n={len(prices)})"

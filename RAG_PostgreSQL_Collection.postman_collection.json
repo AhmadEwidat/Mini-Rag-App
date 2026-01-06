@@ -1,0 +1,238 @@
+{
+	"info": {
+		"_postman_id": "rag-postgresql-001",
+		"name": "RAG PostgreSQL Integration",
+		"description": "Collection لربط RAG مع قاعدة بيانات PostgreSQL",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. ربط قاعدة البيانات",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"db_type\": \"postgresql\",\n    \"host\": \"localhost\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"ahmad-1234\",\n    \"database\": \"pos_system_db\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/data/connect-db/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"data",
+						"connect-db",
+						"pos_system_project"
+					]
+				},
+				"description": "ربط قاعدة البيانات PostgreSQL وتسجيلها كـ Asset"
+			},
+			"response": []
+		},
+		{
+			"name": "2. استخراج البيانات - جداول",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"asset_id\": \"PUT_ASSET_ID_HERE\",\n    \"tables\": [\"users\", \"products\", \"orders\"],\n    \"limit_per_table\": 1000,\n    \"chunk_size\": 200,\n    \"overlap_size\": 30,\n    \"do_reset\": 0\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/data/process-db/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"data",
+						"process-db",
+						"pos_system_project"
+					]
+				},
+				"description": "استخراج البيانات من جداول محددة وتحويلها إلى Chunks"
+			},
+			"response": []
+		},
+		{
+			"name": "2. استخراج البيانات - استعلام SQL",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"asset_id\": \"PUT_ASSET_ID_HERE\",\n    \"custom_query\": \"SELECT * FROM users WHERE active = true\",\n    \"chunk_size\": 200,\n    \"overlap_size\": 30,\n    \"do_reset\": 0\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/data/process-db/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"data",
+						"process-db",
+						"pos_system_project"
+					]
+				},
+				"description": "استخراج البيانات باستخدام استعلام SQL مخصص"
+			},
+			"response": []
+		},
+		{
+			"name": "3. فهرسة في Vector DB",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"do_reset\": 0\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/nlp/index/push/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"nlp",
+						"index",
+						"push",
+						"pos_system_project"
+					]
+				},
+				"description": "إنشاء Embeddings وحفظها في Qdrant"
+			},
+			"response": []
+		},
+		{
+			"name": "4. معلومات الفهرس",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/v1/nlp/index/info/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"nlp",
+						"index",
+						"info",
+						"pos_system_project"
+					]
+				},
+				"description": "الحصول على معلومات المجموعة في Qdrant"
+			},
+			"response": []
+		},
+		{
+			"name": "5. السؤال والحصول على إجابة",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"text\": \"كم عدد المستخدمين النشطين؟\",\n    \"limit\": 5\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/nlp/index/answer/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"nlp",
+						"index",
+						"answer",
+						"pos_system_project"
+					]
+				},
+				"description": "طرح سؤال والحصول على إجابة من RAG"
+			},
+			"response": []
+		},
+		{
+			"name": "6. البحث في Vector DB",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"text\": \"مستخدمين نشطين\",\n    \"limit\": 5\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/v1/nlp/index/search/pos_system_project",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"v1",
+						"nlp",
+						"index",
+						"search",
+						"pos_system_project"
+					]
+				},
+				"description": "البحث المباشر في قاعدة المتجهات"
+			},
+			"response": []
+		}
+	]
+}
+
+
